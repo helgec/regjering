@@ -1,18 +1,14 @@
 import os
 import time
-import feedparser
+import re
 import requests
+import feedparser
 
-# Konfigurasjon
-RSS_URL = "https://www.regjeringen.no/api/rss?types=news&langs=no" # Standard RSS for nyheter på regjeringen.no
+# RSS-feed spesifikt for "Offisielt fra statsråd"
+RSS_URL = "https://www.regjeringen.no/api/rss?types=officialfromcouncil&langs=no"
 SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL")
-SLEEP_INTERVAL = 30 # Sekunder mellom hver sjekk
+SLEEP_INTERVAL = 15  # Sekunder mellom hver sjekk
 
-# Søkeordene vi ser etter (gjort til små bokstaver for enklere matching)
-KEYWORDS = ["kong harald", "gravferd", "begravelse"]
-
-# Vi bruker et Set for å lagre ID-ene til nyhetene vi allerede har sett og sendt, 
-# slik at vi unngår å sende samme melding til Slack flere ganger.
 seen_entries = set()
 
 def check_feed_and_notify():
@@ -20,12 +16,11 @@ def check_feed_and_notify():
     try:
         feed = feedparser.parse(RSS_URL)
         
-        # Sjekker om feeden ble hentet riktig
         if feed.bozo:
             print(f"Feil ved parsing av feed: {feed.bozo_exception}")
             return
 
-        # Går gjennom alle elementene (nyhetene) i feeden
+        # Går gjennom alle nye meldinger om Offisielt fra statsråd
         for entry in feed.entries:
             entry_id = entry.get("id", entry.link)
             
@@ -37,29 +32,18 @@ def check_feed_and_notify():
             description = entry.get("description", "")
             link = entry.link
             
-            # Kombinerer tittel og beskrivelse, og gjør alt til små bokstaver for søket
-            content_to_check = (title + " " + description).lower()
-            
-            # Sjekk om noen av søkeordene finnes i teksten
-            if any(keyword in content_to_check for keyword in KEYWORDS):
-                print(f"Fant relevant nyhet: {title}")
-                send_to_slack(title, link, description)
+            print(f"Fant ny sak fra statsråd: {title}")
+            send_to_slack(title, link, description)
                 
-            # Marker som sett, uansett om den var relevant eller ikke
-            # (så vi ikke sjekker den samme uaktuelle nyheten om og om igjen)
+            # Marker som sett
             seen_entries.add(entry_id)
             
     except Exception as e:
         print(f"En uventet feil oppstod under sjekk av feed: {e}")
 
 def send_to_slack(title, link, description):
-    """Sender en formatert melding til Slack via Webhook."""
-    
-    # Renser ut HTML-tags hvis det finnes i beskrivelsen
-    import re
+    """Sender melding til Slack via Webhook."""
     clean_description = re.sub('<[^<]+?>', '', description)
-    
-    # Korter ned beskrivelsen hvis den er for lang
     if len(clean_description) > 300:
         clean_description = clean_description[:297] + "..."
 
@@ -69,7 +53,7 @@ def send_to_slack(title, link, description):
                 "type": "header",
                 "text": {
                     "type": "plain_text",
-                    "text": "🚨 Ny relevant pressemelding fra Regjeringen!"
+                    "text": "🚨 Nytt fra Statsråd!"
                 }
             },
             {
@@ -89,19 +73,17 @@ def send_to_slack(title, link, description):
         else:
             print("Melding sendt til Slack!")
     except Exception as e:
-         print(f"Nettverksfeil ved sending til Slack: {e}")
+        print(f"Nettverksfeil ved sending til Slack: {e}")
 
 if __name__ == "__main__":
-    print("Starter overvåking av regjeringen.no...")
+    print("Starter overvåking av Offisielt fra statsråd...")
     
-    # Første kjøring: Populer seen_entries uten å sende varsler
-    # Dette hindrer at scriptet sender 50 Slack-meldinger første gang du starter det
+    # Fyller settet ved oppstart for å unngå å sende gamle meldinger på nytt
     initial_feed = feedparser.parse(RSS_URL)
     for entry in initial_feed.entries:
-         seen_entries.add(entry.get("id", entry.link))
-    print(f"Lastet inn {len(seen_entries)} eksisterende nyheter. Venter på nye...")
+        seen_entries.add(entry.get("id", entry.link))
+    print(f"Lastet inn {len(seen_entries)} eksisterende saker. Venter på nye...")
     
-    # Hovedløkken som kjører hvert 30. sekund
     while True:
-        check_feed_and_notify()
         time.sleep(SLEEP_INTERVAL)
+        check_feed_and_notify()
