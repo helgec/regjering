@@ -5,7 +5,7 @@ import requests
 import feedparser
 from datetime import datetime
 
-RSS_URL = "https://www.regjeringen.no/api/rss?types=officialfromcouncil&langs=no"
+RSS_URL = "https://www.regjeringen.no/api/rss?id=30297"
 SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL")
 SLEEP_INTERVAL = 10  # Sekunder mellom hver sjekk
 
