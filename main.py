@@ -7,7 +7,7 @@ from datetime import datetime
 
 RSS_URL = "https://www.regjeringen.no/api/rss?types=officialfromcouncil&langs=no"
 SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL")
-SLEEP_INTERVAL = 30  # Sjekker hvert 30. sekund mellom 11:00 og 12:00
+SLEEP_INTERVAL = 10  # Endret til å sjekke hvert 10. sekund mellom 11:00 og 12:00
 
 seen_entries = set()
 
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     initial_feed = feedparser.parse(RSS_URL)
     for entry in initial_feed.entries:
         seen_entries.add(entry.get("id", entry.link))
-    print(f"Registrerte {len(seen_entries)} eksisterende saker. Overvåker til kl. 12:00...")
+    print(f"Registrerte {len(seen_entries)} eksisterende saker. Overvåker til kl. 12:00 med {SLEEP_INTERVAL} sekunders intervall...")
 
     # Kjører så lenge timen er 11 (frem til 12:00:00)
     while datetime.now().hour == 11:
