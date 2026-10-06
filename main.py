@@ -5,6 +5,10 @@ import requests
 import feedparser
 from datetime import datetime
 
+import sys
+sys.path.append("/home/nrknyheter")
+from status_helper import update_status
+
 RSS_URL = "https://www.regjeringen.no/no/rss/Rss/2581966/?documentType=aktuelt/offisieltfrastatsr%C3%A5d"
 SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL")
 SLEEP_INTERVAL = 10  # Sekunder mellom hver sjekk
@@ -25,7 +29,10 @@ def check_feed_and_notify():
         
         # Hvis feeden mangler saker helt på grunn av en feil, avbryter vi
         if not feed.entries and feed.bozo:
+            err_msg = f"Parsefeil: {feed.bozo_exception}"
             print(f"Parsefeil (ingen saker funnet): {feed.bozo_exception}")
+            # 1. Registrerer parsefeil
+            update_status("statsrad", "Statsråd-overvåker", status="ERROR", error_msg=err_msg)
             return
 
         for entry in feed.entries:
@@ -35,8 +42,13 @@ def check_feed_and_notify():
                 send_to_slack(entry.title, entry.link, entry.get("description", ""))
                 seen_entries.add(entry_id)
 
+        # 2. VELLYKKET: Legges nederst etter at for-løkken er ferdig
+        update_status("statsrad", "Statsråd-overvåker", status="OK")
+
     except Exception as e:
         print(f"Uventet feil ved sjekk av feed: {e}")
+        # 3. CRASH/FEIL: Registrerer feilmeldingen i except-blokken
+        update_status("statsrad", "Statsråd-overvåker", status="ERROR", error_msg=str(e))
 
 def send_to_slack(title, link, description):
     clean_description = re.sub('<[^<]+?>', '', description)
